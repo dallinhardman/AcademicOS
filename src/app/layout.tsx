@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import Sidebar from "@/components/Sidebar";
+import Providers from "@/components/Providers";
 
 export const metadata: Metadata = {
   title: "AcademicOS",
-  description: "Academic learning platform with code chat",
+  description: "AI-driven learning management system for optimized study efficiency",
 };
 
 export default function RootLayout({
@@ -15,10 +16,12 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="font-sans antialiased">
-        <div className="flex min-h-screen">
-          <Sidebar />
-          <main className="flex-1 ml-64">{children}</main>
-        </div>
+        <Providers>
+          <div className="flex min-h-screen">
+            <Sidebar />
+            <main className="flex-1 ml-64">{children}</main>
+          </div>
+        </Providers>
       </body>
     </html>
   );
