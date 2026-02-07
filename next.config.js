@@ -1,4 +1,10 @@
 /** @type {import('next').NextConfig} */
-const nextConfig = {};
+const nextConfig = {
+  webpack: (config) => {
+    // pdfjs-dist optionally requires 'canvas' (Node-native); not needed in browser
+    config.resolve.alias.canvas = false;
+    return config;
+  },
+};
 
 module.exports = nextConfig;
