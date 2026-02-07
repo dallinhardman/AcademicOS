@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useParams } from "next/navigation";
+import { useState, useRef, useCallback } from "react";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAcademic } from "@/context/AcademicContext";
 import { Content } from "@/types";
@@ -13,14 +13,21 @@ const TYPE_LABELS: Record<Content["type"], string> = {
   text: "Text / Notes",
 };
 
+type ProcessingStage = {
+  label: string;
+  status: "pending" | "active" | "done";
+};
+
 export default function UnitDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const unitId = params.id as string;
   const {
     state,
     addContent,
     deleteContent,
     generateSummaryForUnit,
+    generateQuizForSummary,
     getContentsForUnit,
     getSummariesForUnit,
     getQuizzesForUnit,
@@ -37,7 +44,49 @@ export default function UnitDetailPage() {
   const [contentTitle, setContentTitle] = useState("");
   const [contentUrl, setContentUrl] = useState("");
   const [contentText, setContentText] = useState("");
-  const [generating, setGenerating] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Processing simulation state
+  const [processing, setProcessing] = useState(false);
+  const [stages, setStages] = useState<ProcessingStage[]>([]);
+  const [lastGeneratedSummaryId, setLastGeneratedSummaryId] = useState<string | null>(null);
+
+  const readFileAsText = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsText(file);
+    });
+  };
+
+  const handleFileSelect = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const file = files[0];
+    const ext = file.name.split(".").pop()?.toLowerCase();
+
+    if (ext === "txt" || ext === "md" || ext === "csv") {
+      const text = await readFileAsText(file);
+      setContentTitle(file.name.replace(/\.[^.]+$/, ""));
+      setContentText(text);
+      setContentType("text");
+    } else if (ext === "pdf") {
+      setContentTitle(file.name.replace(/\.[^.]+$/, ""));
+      setContentType("pdf");
+      // For PDF we prompt user to paste extracted text since we can't parse binary PDFs client-side
+      setContentText("");
+    } else {
+      setContentTitle(file.name.replace(/\.[^.]+$/, ""));
+      setContentText("");
+    }
+  };
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setDragActive(false);
+    handleFileSelect(e.dataTransfer.files);
+  }, []);
 
   const handleUpload = () => {
     if (!contentTitle.trim() || !contentText.trim()) return;
@@ -54,13 +103,42 @@ export default function UnitDetailPage() {
     setShowUpload(false);
   };
 
-  const handleGenerateSummary = () => {
-    setGenerating(true);
-    // Simulate processing delay
-    setTimeout(() => {
-      generateSummaryForUnit(unitId);
-      setGenerating(false);
-    }, 1500);
+  const runProcessingPipeline = async () => {
+    setProcessing(true);
+    setLastGeneratedSummaryId(null);
+
+    const pipelineStages: ProcessingStage[] = [
+      { label: "Analyzing content sources", status: "pending" },
+      { label: "Extracting key concepts (OCR/ASR)", status: "pending" },
+      { label: "Building knowledge graph", status: "pending" },
+      { label: "Generating executive summary", status: "pending" },
+      { label: "Extracting definitions & glossary", status: "pending" },
+      { label: "Writing detailed breakdown", status: "pending" },
+    ];
+
+    setStages([...pipelineStages]);
+
+    for (let i = 0; i < pipelineStages.length; i++) {
+      pipelineStages[i].status = "active";
+      setStages([...pipelineStages]);
+
+      // Simulate work with varying durations
+      const durations = [600, 800, 700, 900, 700, 600];
+      await new Promise((r) => setTimeout(r, durations[i]));
+
+      pipelineStages[i].status = "done";
+      setStages([...pipelineStages]);
+    }
+
+    // Actually generate the summary
+    const summary = generateSummaryForUnit(unitId);
+
+    await new Promise((r) => setTimeout(r, 400));
+    setProcessing(false);
+
+    if (summary) {
+      setLastGeneratedSummaryId(summary.id);
+    }
   };
 
   if (!unit) {
@@ -110,17 +188,17 @@ export default function UnitDetailPage() {
           </button>
           {contents.length > 0 && (
             <button
-              onClick={handleGenerateSummary}
-              disabled={generating}
+              onClick={runProcessingPipeline}
+              disabled={processing}
               className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors disabled:opacity-50"
             >
-              {generating ? (
+              {processing ? (
                 <>
                   <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
-                  Generating...
+                  Processing...
                 </>
               ) : (
                 <>
@@ -134,6 +212,63 @@ export default function UnitDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Processing Pipeline Progress */}
+      {(processing || lastGeneratedSummaryId) && stages.length > 0 && (
+        <div className="bg-white border border-slate-200 rounded-xl p-5 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-slate-900">
+              {processing ? "Processing Content..." : "Summary Generated!"}
+            </h3>
+            {!processing && lastGeneratedSummaryId && (
+              <div className="flex gap-2">
+                <Link
+                  href={`/summaries/${lastGeneratedSummaryId}`}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-medium hover:bg-emerald-700 transition-colors"
+                >
+                  View Study Guide
+                </Link>
+                <button
+                  onClick={() => {
+                    const quiz = generateQuizForSummary(lastGeneratedSummaryId);
+                    if (quiz) router.push(`/quizzes/${quiz.id}`);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 text-white rounded-lg text-xs font-medium hover:bg-purple-700 transition-colors"
+                >
+                  Test Me on This
+                </button>
+              </div>
+            )}
+          </div>
+          <div className="space-y-2">
+            {stages.map((stage, i) => (
+              <div key={i} className="flex items-center gap-3">
+                <div className="w-5 h-5 flex items-center justify-center shrink-0">
+                  {stage.status === "done" ? (
+                    <svg className="w-5 h-5 text-emerald-500" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  ) : stage.status === "active" ? (
+                    <svg className="w-5 h-5 text-academic-600 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                  ) : (
+                    <div className="w-4 h-4 rounded-full border-2 border-slate-200 ml-0.5" />
+                  )}
+                </div>
+                <span className={`text-sm ${
+                  stage.status === "done" ? "text-emerald-700" :
+                  stage.status === "active" ? "text-academic-700 font-medium" :
+                  "text-slate-400"
+                }`}>
+                  {stage.label}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Upload Form */}
       {showUpload && (
@@ -155,6 +290,35 @@ export default function UnitDetailPage() {
                 </button>
               ))}
             </div>
+
+            {/* Drag & Drop / File Input zone */}
+            <div
+              onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
+              onDragLeave={() => setDragActive(false)}
+              onDrop={handleDrop}
+              onClick={() => fileInputRef.current?.click()}
+              className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
+                dragActive
+                  ? "border-academic-400 bg-academic-50"
+                  : "border-slate-300 hover:border-slate-400 bg-slate-50"
+              }`}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".txt,.md,.csv,.pdf"
+                onChange={(e) => handleFileSelect(e.target.files)}
+                className="hidden"
+              />
+              <svg className="w-8 h-8 text-slate-400 mx-auto mb-2" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+              </svg>
+              <p className="text-sm text-slate-600 font-medium">
+                {dragActive ? "Drop file here" : "Click or drag a file to upload"}
+              </p>
+              <p className="text-xs text-slate-400 mt-1">Supports .txt, .md, .csv, .pdf (text will be extracted)</p>
+            </div>
+
             <input
               type="text"
               value={contentTitle}
@@ -178,7 +342,7 @@ export default function UnitDetailPage() {
                 contentType === "youtube"
                   ? "Paste the video transcript here (or text extracted from the video)"
                   : contentType === "pdf"
-                  ? "Paste the extracted text from the PDF"
+                  ? "Paste the extracted text from the PDF here, or drop a .txt file above"
                   : "Paste your lecture notes, transcript, or content here"
               }
               rows={8}
@@ -187,7 +351,8 @@ export default function UnitDetailPage() {
             <div className="flex gap-3">
               <button
                 onClick={handleUpload}
-                className="px-4 py-2 bg-academic-600 text-white rounded-lg text-sm font-medium hover:bg-academic-700"
+                disabled={!contentTitle.trim() || !contentText.trim()}
+                className="px-4 py-2 bg-academic-600 text-white rounded-lg text-sm font-medium hover:bg-academic-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Add Content
               </button>
@@ -215,8 +380,12 @@ export default function UnitDetailPage() {
               <h2 className="text-base font-semibold text-slate-900">Content ({contents.length})</h2>
             </div>
             {contents.length === 0 ? (
-              <div className="px-6 py-8 text-center text-sm text-slate-400">
-                No content uploaded yet. Upload content to generate summaries.
+              <div className="px-6 py-8 text-center">
+                <svg className="w-10 h-10 text-slate-300 mx-auto mb-3" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                </svg>
+                <p className="text-sm text-slate-500 mb-1">No content uploaded yet</p>
+                <p className="text-xs text-slate-400">Upload lecture slides, transcripts, or notes to get started.</p>
               </div>
             ) : (
               <div className="divide-y divide-slate-100">
@@ -235,7 +404,9 @@ export default function UnitDetailPage() {
                         <p className="text-sm font-medium text-slate-900">{c.title}</p>
                         <p className="text-xs text-slate-500 mt-0.5">
                           {c.rawText.length.toLocaleString()} chars
-                          {c.status === "processing" && " - Processing..."}
+                          {c.url && (
+                            <span className="ml-2 text-academic-500">{c.url.length > 40 ? c.url.slice(0, 40) + "..." : c.url}</span>
+                          )}
                         </p>
                       </div>
                     </div>
@@ -262,7 +433,7 @@ export default function UnitDetailPage() {
             </div>
             {summaries.length === 0 ? (
               <div className="px-5 py-6 text-center text-xs text-slate-400">
-                Generate a summary from your content.
+                Upload content, then click &quot;Generate Summary&quot;.
               </div>
             ) : (
               <div className="divide-y divide-slate-100">
@@ -305,6 +476,16 @@ export default function UnitDetailPage() {
               </div>
             )}
           </div>
+
+          {/* Quick Actions */}
+          {contents.length > 0 && summaries.length === 0 && !processing && (
+            <div className="bg-academic-50 border border-academic-200 rounded-xl p-4">
+              <p className="text-sm text-academic-800 font-medium mb-1">Ready to summarize!</p>
+              <p className="text-xs text-academic-600">
+                You have {contents.length} content source{contents.length > 1 ? "s" : ""}. Click &quot;Generate Summary&quot; to create your study guide.
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>
