@@ -96,6 +96,49 @@ export interface ScheduleItem {
   status: "due" | "upcoming" | "completed";
 }
 
+// ============================================
+// Google Workspace Integration
+// ============================================
+
+export interface GoogleConnection {
+  connected: boolean;
+  email?: string;
+  name?: string;
+  avatarUrl?: string;
+  accessToken?: string;
+  connectedAt?: string;
+}
+
+export interface DriveFile {
+  id: string;
+  name: string;
+  mimeType: string;
+  size?: number;
+  iconUrl?: string;
+  modifiedTime?: string;
+  webViewLink?: string;
+}
+
+export interface DriveFolder {
+  id: string;
+  name: string;
+  webViewLink?: string;
+}
+
+export interface LinkedDriveFolder {
+  unitId: string;
+  folder: DriveFolder;
+  linkedAt: string;
+  lastSyncedAt?: string;
+}
+
+export interface CalendarSyncStatus {
+  enabled: boolean;
+  calendarId?: string;
+  lastSyncedAt?: string;
+  syncedEventIds: Record<string, string>; // scheduleItemId -> calendarEventId
+}
+
 export interface AppState {
   semesters: Semester[];
   units: Unit[];
@@ -104,4 +147,7 @@ export interface AppState {
   quizzes: Quiz[];
   quizAttempts: QuizAttempt[];
   scheduleItems: ScheduleItem[];
+  googleConnection: GoogleConnection;
+  linkedDriveFolders: LinkedDriveFolder[];
+  calendarSync: CalendarSyncStatus;
 }

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useAcademic } from "@/context/AcademicContext";
 import { Content } from "@/types";
 import ContentUploader from "@/components/ContentUploader";
+import GoogleDrivePicker from "@/components/GoogleDrivePicker";
 import { ProcessingStep } from "@/lib/file-processor";
 
 const TYPE_LABELS: Record<Content["type"], string> = {
@@ -28,6 +29,8 @@ export default function UnitDetailPage() {
     getContentsForUnit,
     getSummariesForUnit,
     getQuizzesForUnit,
+    getLinkedFolder,
+    unlinkDriveFolder,
   } = useAcademic();
 
   const unit = state.units.find((u) => u.id === unitId);
@@ -36,11 +39,15 @@ export default function UnitDetailPage() {
   const summaries = getSummariesForUnit(unitId);
   const quizzes = getQuizzesForUnit(unitId);
 
+  const linkedFolder = getLinkedFolder(unitId);
+  const googleConnected = state.googleConnection.connected;
+
   // Summary generation pipeline
   const [processing, setProcessing] = useState(false);
   const [stages, setStages] = useState<ProcessingStep[]>([]);
   const [lastGeneratedSummaryId, setLastGeneratedSummaryId] = useState<string | null>(null);
   const [expandedContent, setExpandedContent] = useState<string | null>(null);
+  const [showDrivePicker, setShowDrivePicker] = useState(false);
 
   const handleAddContent = (type: Content["type"], title: string, text: string, url?: string) => {
     addContent(unitId, type, title, text, url);
@@ -197,8 +204,63 @@ export default function UnitDetailPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
+          {/* Linked Drive folder badge */}
+          {linkedFolder && !showDrivePicker && (
+            <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <svg className="w-4 h-4 text-blue-600" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M7.71 3.5L1.15 15l3.43 5.98h6.56L7.71 3.5zm1.14 0l3.43 5.98h11.57l-3.43-5.98H8.85zm11.57 6.98H12.28L8.85 21h11.57l3.43-5.98-3.43-4.54z" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-blue-800">{linkedFolder.folder.name}</p>
+                  <p className="text-xs text-blue-600">
+                    Google Drive folder linked
+                    {linkedFolder.lastSyncedAt && (
+                      <span className="text-blue-400 ml-1">
+                        &middot; Last synced {new Date(linkedFolder.lastSyncedAt).toLocaleDateString()}
+                      </span>
+                    )}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowDrivePicker(true)}
+                  className="text-xs font-medium text-blue-700 hover:text-blue-900 px-2 py-1 rounded hover:bg-blue-100 transition-colors"
+                >
+                  Browse Files
+                </button>
+                <button
+                  onClick={() => unlinkDriveFolder(unitId)}
+                  className="text-xs text-blue-400 hover:text-red-500 p-1 transition-colors"
+                  title="Unlink folder"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Google Drive Picker overlay */}
+          {showDrivePicker && (
+            <GoogleDrivePicker
+              unitId={unitId}
+              onImport={(type, title, text) => handleAddContent(type, title, text)}
+              onClose={() => setShowDrivePicker(false)}
+            />
+          )}
+
           {/* Upload area — hero when empty, compact when content exists */}
-          <ContentUploader onAdd={handleAddContent} compact={contents.length > 0} />
+          <ContentUploader
+            onAdd={handleAddContent}
+            compact={contents.length > 0}
+            onOpenGoogleDrive={() => setShowDrivePicker(true)}
+            googleConnected={googleConnected}
+          />
 
           {/* Content list */}
           {contents.length > 0 && (

@@ -17,11 +17,13 @@ import {
 interface ContentUploaderProps {
   onAdd: (type: Content["type"], title: string, text: string, url?: string) => void;
   compact?: boolean;
+  onOpenGoogleDrive?: () => void;
+  googleConnected?: boolean;
 }
 
 type Mode = "idle" | "processing" | "preview" | "paste" | "youtube" | "success";
 
-export default function ContentUploader({ onAdd, compact }: ContentUploaderProps) {
+export default function ContentUploader({ onAdd, compact, onOpenGoogleDrive, googleConnected }: ContentUploaderProps) {
   const [mode, setMode] = useState<Mode>("idle");
   const [dragActive, setDragActive] = useState(false);
   const [steps, setSteps] = useState<ProcessingStep[]>([]);
@@ -529,10 +531,10 @@ export default function ContentUploader({ onAdd, compact }: ContentUploaderProps
         <div className="flex-1 h-px bg-slate-200" />
       </div>
 
-      <div className={`grid gap-2 ${compact ? "grid-cols-2" : "grid-cols-2"}`}>
+      <div className="grid gap-2 grid-cols-3">
         <button
           onClick={() => setMode("paste")}
-          className="flex items-center justify-center gap-2 px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-600 hover:border-slate-300 hover:text-slate-900 transition-colors"
+          className="flex items-center justify-center gap-2 px-3 py-3 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-600 hover:border-slate-300 hover:text-slate-900 transition-colors"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9.75a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184" />
@@ -541,13 +543,24 @@ export default function ContentUploader({ onAdd, compact }: ContentUploaderProps
         </button>
         <button
           onClick={() => setMode("youtube")}
-          className="flex items-center justify-center gap-2 px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-600 hover:border-slate-300 hover:text-slate-900 transition-colors"
+          className="flex items-center justify-center gap-2 px-3 py-3 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-600 hover:border-slate-300 hover:text-slate-900 transition-colors"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
           </svg>
           YouTube Link
         </button>
+        {onOpenGoogleDrive && (
+          <button
+            onClick={onOpenGoogleDrive}
+            className="flex items-center justify-center gap-2 px-3 py-3 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-600 hover:border-blue-300 hover:text-blue-700 transition-colors"
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12.545 10.239v3.821h5.445c-.712 2.315-2.647 3.972-5.445 3.972a6.033 6.033 0 110-12.064c1.498 0 2.866.549 3.921 1.453l2.814-2.814A9.969 9.969 0 0012.545 2C7.021 2 2.543 6.477 2.543 12s4.478 10 10.002 10c8.396 0 10.249-7.85 9.426-11.748l-9.426-.013z" />
+            </svg>
+            {googleConnected ? "Google Drive" : "Connect Drive"}
+          </button>
+        )}
       </div>
     </div>
   );

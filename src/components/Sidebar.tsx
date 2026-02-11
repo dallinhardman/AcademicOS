@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useAcademic } from "@/context/AcademicContext";
+import { signInWithGoogle, signOutGoogle } from "@/lib/google-api";
 
 const navigation = [
   {
@@ -62,6 +64,21 @@ const navigation = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const { state, setGoogleConnection } = useAcademic();
+  const { googleConnection } = state;
+
+  const handleGoogleToggle = async () => {
+    if (googleConnection.connected) {
+      setGoogleConnection(signOutGoogle());
+    } else {
+      try {
+        const conn = await signInWithGoogle();
+        setGoogleConnection(conn);
+      } catch {
+        // Silently fail
+      }
+    }
+  };
 
   return (
     <aside className="w-64 bg-white border-r border-slate-200 flex flex-col h-screen fixed left-0 top-0">
@@ -99,7 +116,42 @@ export default function Sidebar() {
         })}
       </nav>
 
-      <div className="p-4 border-t border-slate-200">
+      <div className="p-4 border-t border-slate-200 space-y-2">
+        {/* Google Workspace connection */}
+        <button
+          onClick={handleGoogleToggle}
+          className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
+            googleConnection.connected
+              ? "bg-blue-50 hover:bg-blue-100"
+              : "hover:bg-slate-50"
+          }`}
+        >
+          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+            googleConnection.connected ? "bg-blue-100" : "bg-slate-100"
+          }`}>
+            <svg className={`w-4 h-4 ${googleConnection.connected ? "text-blue-600" : "text-slate-400"}`} viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12.545 10.239v3.821h5.445c-.712 2.315-2.647 3.972-5.445 3.972a6.033 6.033 0 110-12.064c1.498 0 2.866.549 3.921 1.453l2.814-2.814A9.969 9.969 0 0012.545 2C7.021 2 2.543 6.477 2.543 12s4.478 10 10.002 10c8.396 0 10.249-7.85 9.426-11.748l-9.426-.013z" />
+            </svg>
+          </div>
+          <div className="flex-1 min-w-0">
+            {googleConnection.connected ? (
+              <>
+                <p className="text-xs font-medium text-blue-800 truncate">{googleConnection.name || "Google"}</p>
+                <p className="text-[10px] text-blue-600 truncate">{googleConnection.email}</p>
+              </>
+            ) : (
+              <>
+                <p className="text-xs font-medium text-slate-600">Google Workspace</p>
+                <p className="text-[10px] text-slate-400">Click to connect</p>
+              </>
+            )}
+          </div>
+          {googleConnection.connected && (
+            <div className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
+          )}
+        </button>
+
+        {/* User profile */}
         <div className="flex items-center gap-3 px-3 py-2">
           <div className="w-8 h-8 bg-academic-100 rounded-full flex items-center justify-center">
             <span className="text-sm font-medium text-academic-700">S</span>

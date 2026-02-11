@@ -10,6 +10,10 @@ import {
   Quiz,
   QuizAttempt,
   ScheduleItem,
+  GoogleConnection,
+  LinkedDriveFolder,
+  DriveFolder,
+  CalendarSyncStatus,
 } from "@/types";
 import {
   sampleSemesters,
@@ -34,6 +38,9 @@ const initialState: AppState = {
   quizzes: sampleQuizzes,
   quizAttempts: [],
   scheduleItems: sampleScheduleItems,
+  googleConnection: { connected: false },
+  linkedDriveFolders: [],
+  calendarSync: { enabled: false, syncedEventIds: {} },
 };
 
 type Action =
@@ -53,7 +60,12 @@ type Action =
   | { type: "DELETE_QUIZ"; payload: string }
   | { type: "ADD_QUIZ_ATTEMPT"; payload: QuizAttempt }
   | { type: "SET_SCHEDULE_ITEM"; payload: ScheduleItem }
-  | { type: "REMOVE_SCHEDULE_ITEM"; payload: string };
+  | { type: "REMOVE_SCHEDULE_ITEM"; payload: string }
+  | { type: "SET_GOOGLE_CONNECTION"; payload: GoogleConnection }
+  | { type: "LINK_DRIVE_FOLDER"; payload: LinkedDriveFolder }
+  | { type: "UNLINK_DRIVE_FOLDER"; payload: string } // unitId
+  | { type: "UPDATE_DRIVE_FOLDER_SYNC"; payload: { unitId: string; lastSyncedAt: string } }
+  | { type: "SET_CALENDAR_SYNC"; payload: CalendarSyncStatus };
 
 function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
@@ -128,6 +140,32 @@ function reducer(state: AppState, action: Action): AppState {
         ...state,
         scheduleItems: state.scheduleItems.filter((s) => s.id !== action.payload),
       };
+    case "SET_GOOGLE_CONNECTION":
+      return { ...state, googleConnection: action.payload };
+    case "LINK_DRIVE_FOLDER": {
+      const filtered = state.linkedDriveFolders.filter(
+        (l) => l.unitId !== action.payload.unitId
+      );
+      return { ...state, linkedDriveFolders: [...filtered, action.payload] };
+    }
+    case "UNLINK_DRIVE_FOLDER":
+      return {
+        ...state,
+        linkedDriveFolders: state.linkedDriveFolders.filter(
+          (l) => l.unitId !== action.payload
+        ),
+      };
+    case "UPDATE_DRIVE_FOLDER_SYNC":
+      return {
+        ...state,
+        linkedDriveFolders: state.linkedDriveFolders.map((l) =>
+          l.unitId === action.payload.unitId
+            ? { ...l, lastSyncedAt: action.payload.lastSyncedAt }
+            : l
+        ),
+      };
+    case "SET_CALENDAR_SYNC":
+      return { ...state, calendarSync: action.payload };
     default:
       return state;
   }
@@ -162,6 +200,13 @@ interface AcademicContextType {
   getAttemptsForQuiz: (quizId: string) => QuizAttempt[];
   getDueScheduleItems: () => ScheduleItem[];
   getUpcomingScheduleItems: () => ScheduleItem[];
+  // Google Workspace actions
+  setGoogleConnection: (connection: GoogleConnection) => void;
+  linkDriveFolder: (unitId: string, folder: DriveFolder) => void;
+  unlinkDriveFolder: (unitId: string) => void;
+  updateDriveFolderSync: (unitId: string) => void;
+  getLinkedFolder: (unitId: string) => LinkedDriveFolder | undefined;
+  setCalendarSync: (sync: CalendarSyncStatus) => void;
 }
 
 const AcademicContext = createContext<AcademicContextType | null>(null);
@@ -175,6 +220,10 @@ export function AcademicProvider({ children }: { children: React.ReactNode }) {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
+        // Ensure new Google fields exist for backward compat with old localStorage
+        if (!parsed.googleConnection) parsed.googleConnection = { connected: false };
+        if (!parsed.linkedDriveFolders) parsed.linkedDriveFolders = [];
+        if (!parsed.calendarSync) parsed.calendarSync = { enabled: false, syncedEventIds: {} };
         dispatch({ type: "LOAD_STATE", payload: parsed });
       }
     } catch {
@@ -346,6 +395,41 @@ export function AcademicProvider({ children }: { children: React.ReactNode }) {
     [state.scheduleItems]
   );
 
+  // --- Google Workspace actions ---
+
+  const setGoogleConnection = useCallback((connection: GoogleConnection) => {
+    dispatch({ type: "SET_GOOGLE_CONNECTION", payload: connection });
+  }, []);
+
+  const linkDriveFolder = useCallback((unitId: string, folder: DriveFolder) => {
+    const linked: LinkedDriveFolder = {
+      unitId,
+      folder,
+      linkedAt: new Date().toISOString(),
+    };
+    dispatch({ type: "LINK_DRIVE_FOLDER", payload: linked });
+  }, []);
+
+  const unlinkDriveFolder = useCallback((unitId: string) => {
+    dispatch({ type: "UNLINK_DRIVE_FOLDER", payload: unitId });
+  }, []);
+
+  const updateDriveFolderSync = useCallback((unitId: string) => {
+    dispatch({
+      type: "UPDATE_DRIVE_FOLDER_SYNC",
+      payload: { unitId, lastSyncedAt: new Date().toISOString() },
+    });
+  }, []);
+
+  const getLinkedFolder = useCallback(
+    (unitId: string) => state.linkedDriveFolders.find((l) => l.unitId === unitId),
+    [state.linkedDriveFolders]
+  );
+
+  const setCalendarSync = useCallback((sync: CalendarSyncStatus) => {
+    dispatch({ type: "SET_CALENDAR_SYNC", payload: sync });
+  }, []);
+
   const value: AcademicContextType = {
     state,
     addSemester,
@@ -368,6 +452,12 @@ export function AcademicProvider({ children }: { children: React.ReactNode }) {
     getAttemptsForQuiz,
     getDueScheduleItems,
     getUpcomingScheduleItems,
+    setGoogleConnection,
+    linkDriveFolder,
+    unlinkDriveFolder,
+    updateDriveFolderSync,
+    getLinkedFolder,
+    setCalendarSync,
   };
 
   return (
